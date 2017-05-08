@@ -4,8 +4,12 @@ use std::cmp::Ordering;
 
 
 mod parallel;
-pub use self::parallel::parallel_bitonic_sort_descending;
-pub use self::parallel::parallel_bitonic_sort_ascending;
+pub use self::parallel::{
+    parallel_bitonic_sort_descending,
+    parallel_bitonic_sort_ascending,
+    parallel_bitonic_sort_ascending_func,
+    parallel_bitonic_sort_descending_func
+};
 
 /// If A's relation to B is O they are swapped
 #[inline(always)]

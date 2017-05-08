@@ -43,7 +43,7 @@ impl TrackerAtomic {
         self.locker.store(0,AtomicOrdering::SeqCst);
     }
     // how many threads can be launched
-    fn launch_threads(&self) -> usize {
+    fn start_threads(&self) -> usize {
         self.lock();
         let ret: usize;
         let sized = self.count.load(AtomicOrdering::Relaxed);
@@ -62,7 +62,7 @@ impl TrackerAtomic {
         return ret;
     }
     // note that threads ended
-    fn threads_end(&self, val: usize) {
+    fn stop_threads(&self, val: usize) {
         self.lock();
         self.count.fetch_add(val, AtomicOrdering::Relaxed);
         self.unlock();
@@ -273,7 +273,7 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
     low: usize,
     count: usize,
     o: Ordering,
-    a: &Tracker,
+    a: &TrackerAtomic,
     f: &DumbThing<T,F>
 ) {
     if count > 1 {
@@ -281,13 +281,7 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
         for i in low..(split+low) {
             cmp_and_swap_func(arr.as_mut_slice(), i, i+split, o, f.refer());
         }
-        let mut thread_count = 0usize;
-        if a.increment() {
-            thread_count += 1;
-        }
-        if a.increment() {
-            thread_count += 1;
-        }
+        let thread_count = a.start_threads();
         match thread_count {
             2 => {
                 crossbeam::scope(|scope| {
@@ -298,8 +292,7 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
                         bitonic_merge_func(arr, low+split, split, o, a, f);
                     });
                 });
-                a.decrement();
-                a.decrement();
+                a.stop_threads(2);
             },
             1 => {
                 crossbeam::scope(|scope| {
@@ -308,7 +301,7 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
                     });
                     bitonic_merge_func(arr, low+split, split, o, a, f);
                 });
-                a.decrement();
+                a.stop_threads(1);
             },
             0 => {
                 bitonic_merge_func(arr, low, split, o, a, f);
@@ -324,18 +317,12 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
     low: usize, 
     count: usize,
     o: Ordering,
-    a: &Tracker, 
+    a: &TrackerAtomic, 
     f: &DumbThing<T,F>
 ) {
     if count > 1 {
         let split = count >> 1;
-        let mut thread_count = 0usize;
-        if a.increment() {
-            thread_count += 1;
-        }
-        if a.increment() {
-            thread_count += 1;
-        }
+        let thread_count = a.start_threads();
         match thread_count {
             2 => {
                 crossbeam::scope(|scope| {
@@ -346,8 +333,7 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
                         bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f);
                     });
                 });
-                a.decrement();
-                a.decrement();
+                a.stop_threads(2);
             },
             1 => {
                 crossbeam::scope(|scope| {
@@ -356,7 +342,7 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
                     });
                     bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f);
                 });
-                a.decrement();
+                a.stop_threads(1);
             },
             0 => {
                 bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f);
@@ -380,7 +366,7 @@ pub fn parallel_bitonic_sort_descending_func<T, F: Fn(&T,&T)->Ordering>(
     let threads = if threads == 0 { 1 } else { threads };
     let len = arr.len();
     let arr = Array::new(arr);
-    let track = Tracker::new(threads);
+    let track = TrackerAtomic::new(threads);
     let f = DumbThing::new(cmp);
     bitonic_t_sort_func(&arr, 0, len, Ordering::Less, &track, &f);
 }
@@ -397,7 +383,7 @@ pub fn parallel_bitonic_sort_ascending_func<T, F: Fn(&T,&T)->Ordering>(
     let threads = if threads == 0 { 1 } else { threads };
     let len = arr.len();
     let arr = Array::new(arr);
-    let track = Tracker::new(threads);
+    let track = TrackerAtomic::new(threads);
     let f = DumbThing::new(cmp);
     bitonic_t_sort_func(&arr, 0, len, Ordering::Greater, &track, &f);
 }

@@ -363,6 +363,7 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
 pub fn parallel_bitonic_sort_descending_func<T, F: Fn(&T,&T)->Ordering>(
     arr: &mut [T], 
     threads: usize, 
+    suggestion: usize,
     cmp: &F
 ) {
     let threads = if threads == 0 { 1 } else { threads };
@@ -370,7 +371,7 @@ pub fn parallel_bitonic_sort_descending_func<T, F: Fn(&T,&T)->Ordering>(
     let arr = Array::new(arr);
     let track = TrackerAtomic::new(threads);
     let f = DumbThing::new(cmp);
-    bitonic_t_sort_func(&arr, 0, len, Ordering::Less, &track, &f);
+    bitonic_t_sort_func(&arr, 0, len, Ordering::Less, &track, &f, suggestion);
 }
 
 /// Preforms a concurrent bitonic sort.
@@ -391,7 +392,7 @@ pub fn parallel_bitonic_sort_ascending_func<T, F: Fn(&T,&T)->Ordering>(
     let arr = Array::new(arr);
     let track = TrackerAtomic::new(threads);
     let f = DumbThing::new(cmp);
-    bitonic_t_sort_func(&arr, 0, len, Ordering::Greater, &track, &f);
+    bitonic_t_sort_func(&arr, 0, len, Ordering::Greater, &track, &f, suggestion);
 }
 #[test]
 fn test_parallel_bitonic_sort_func() {

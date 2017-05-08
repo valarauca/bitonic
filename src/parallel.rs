@@ -274,22 +274,23 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
     count: usize,
     o: Ordering,
     a: &TrackerAtomic,
-    f: &DumbThing<T,F>
+    f: &DumbThing<T,F>,
+    suggestion: usize
 ) {
     if count > 1 {
         let split = count >> 1;
         for i in low..(split+low) {
             cmp_and_swap_func(arr.as_mut_slice(), i, i+split, o, f.refer());
         }
-        let thread_count = if split > 100000 { a.start_threads() } else { 0 };
+        let thread_count = if split > suggestion { a.start_threads() } else { 0 };
         match thread_count {
             2 => {
                 crossbeam::scope(|scope| {
                     scope.spawn(move ||{
-                        bitonic_merge_func(arr, low, split, o, a, f);
+                        bitonic_merge_func(arr, low, split, o, a, f, suggestion);
                     });
                     scope.spawn(move ||{
-                        bitonic_merge_func(arr, low+split, split, o, a, f);
+                        bitonic_merge_func(arr, low+split, split, o, a, f, suggestion);
                     });
                 });
                 a.stop_threads(2);
@@ -297,15 +298,15 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
             1 => {
                 crossbeam::scope(|scope| {
                     scope.spawn(move ||{
-                        bitonic_merge_func(arr, low, split, o, a, f);
+                        bitonic_merge_func(arr, low, split, o, a, f, suggestion);
                     });
-                    bitonic_merge_func(arr, low+split, split, o, a, f);
+                    bitonic_merge_func(arr, low+split, split, o, a, f, suggestion);
                 });
                 a.stop_threads(1);
             },
             0 => {
-                bitonic_merge_func(arr, low, split, o, a, f);
-                bitonic_merge_func(arr, low+split, split, o, a, f);
+                bitonic_merge_func(arr, low, split, o, a, f, suggestion);
+                bitonic_merge_func(arr, low+split, split, o, a, f, suggestion);
             },
             _ => unreachable!()
         };
@@ -318,19 +319,20 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
     count: usize,
     o: Ordering,
     a: &TrackerAtomic, 
-    f: &DumbThing<T,F>
+    f: &DumbThing<T,F>,
+    suggestion: usize
 ) {
     if count > 1 {
         let split = count >> 1;
-        let thread_count = if split > 100000 { a.start_threads() } else { 0 };
+        let thread_count = if split > suggestion { a.start_threads() } else { 0 };
         match thread_count {
             2 => {
                 crossbeam::scope(|scope| {
                     scope.spawn(move ||{
-                        bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f);
+                        bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f, suggestion);
                     });
                     scope.spawn(move ||{
-                        bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f);
+                        bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f, suggestion);
                     });
                 });
                 a.stop_threads(2);
@@ -338,19 +340,19 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
             1 => {
                 crossbeam::scope(|scope| {
                     scope.spawn(move ||{
-                        bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f);
+                        bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f, suggestion);
                     });
-                    bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f);
+                    bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f, suggestion);
                 });
                 a.stop_threads(1);
             },
             0 => {
-                bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f);
-                bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f);
+                bitonic_t_sort_func(arr, low, split, Ordering::Greater, a, f, suggestion);
+                bitonic_t_sort_func(arr, low+split, split, Ordering::Less, a, f, suggestion);
             },
             _ => unreachable!()
         };
-        bitonic_merge_func(arr,low,count,o,a, f);
+        bitonic_merge_func(arr,low, count, o, a, f, suggestion);
     }
 }
 
@@ -375,9 +377,13 @@ pub fn parallel_bitonic_sort_descending_func<T, F: Fn(&T,&T)->Ordering>(
 ///
 /// This is an early version of the crate so there is a fair amount of 
 /// lock contention, that'll be improved as time goes on.
+///
+/// suggestion is the cut off for threading. If there are less then
+/// `suggestion` rows the method won't attempt to fork
 pub fn parallel_bitonic_sort_ascending_func<T, F: Fn(&T,&T)->Ordering>(
     arr: &mut [T], 
     threads: usize,
+    suggestion: usize,
     cmp: &F
 ) {
     let threads = if threads == 0 { 1 } else { threads };

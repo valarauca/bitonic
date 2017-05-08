@@ -1,0 +1,7 @@
+[package]
+name = "bitonic"
+version = "0.1.0"
+authors = ["WCLaeder <codylaeder>"]
+
+[dependencies]
+crossbeam = { version = "0.2.10" }

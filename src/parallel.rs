@@ -281,7 +281,7 @@ fn bitonic_merge_func<T, F: Fn(&T,&T)->Ordering>(
         for i in low..(split+low) {
             cmp_and_swap_func(arr.as_mut_slice(), i, i+split, o, f.refer());
         }
-        let thread_count = a.start_threads();
+        let thread_count = if split > 100000 { a.start_threads() } else { 0 };
         match thread_count {
             2 => {
                 crossbeam::scope(|scope| {
@@ -322,7 +322,7 @@ fn bitonic_t_sort_func<T, F: Fn(&T,&T)->Ordering>(
 ) {
     if count > 1 {
         let split = count >> 1;
-        let thread_count = a.start_threads();
+        let thread_count = if split > 100000 { a.start_threads() } else { 0 };
         match thread_count {
             2 => {
                 crossbeam::scope(|scope| {
